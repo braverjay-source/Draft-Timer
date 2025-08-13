@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Snake Draft Countdown</title>
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --panel: #121923;
+      --accent: #4fc3f7;
+      --accent-2: #a3ffac;
+      --text: #e6eef8;
+      --sub: #9db2c6;
+      --danger: #ff6b6b;
+      --warn: #ffd166;
+      --muted: #273242;
+      --radius: 18px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
+    }
+    .wrap {
+      display: grid; grid-template-columns: 360px 1fr; gap: 16px; min-height: 100vh; padding: 16px;
+    }
+    .panel {
+      background: var(--panel); border: 1px solid var(--muted); border-radius: var(--radius); padding: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.3);
+    }
+    .panel h2 { margin: 0 0 12px; font-size: 18px; color: var(--sub); font-weight: 600; letter-spacing: .3px; }
+    .settings label { display: block; font-size: 12px; color: var(--sub); margin: 10px 0 6px; }
+    .settings textarea, .settings input, .settings select {
+      width: 100%; background: #0e141c; color: var(--text); border: 1px solid var(--muted); border-radius: 10px; padding: 10px; font-size: 14px;
+    }
+    .settings small { color: var(--sub); opacity: .9; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .btn {
+      appearance: none; border: 1px solid var(--muted); background: #0f1620; color: var(--text);
+      padding: 10px 12px; border-radius: 12px; font-size: 14px; cursor: pointer; transition: .15s transform, .2s background, .2s border-color;
+    }
+    .btn:hover { transform: translateY(-1px); border-color: var(--accent); }
+    .btn.primary { background: linear-gradient(135deg, #163045, #0e1f2d); border-color: #234157; }
+    .btn.go { background: linear-gradient(135deg, #0b2c1a, #10331f); border-color: #1f7a3d; }
+    .btn.warn { background: linear-gradient(135deg, #3a220a, #3d1e0c); border-color: #7a4b1f; }
+    .btn.danger { background: linear-gradient(135deg, #3b1212, #2a1010); border-color: #7a1f1f; }
+    .btn.ghost { background: transparent; }
+
+    .stage { display: grid; place-items: center; background: radial-gradient(1200px 800px at 50% 10%, #152232 0%, #0b0f14 70%); border-radius: var(--radius); padding: 16px; }
+    .stage-inner { width: min(1200px, 100%); display: grid; grid-template-rows: auto 1fr auto; gap: 16px; }
+    .board {
+      background: #0e1622; border: 1px solid var(--muted); border-radius: 20px; padding: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+    }
+    .team-now {
+      background: linear-gradient(180deg, rgba(79,195,247,.12), rgba(79,195,247,.02));
+      border: 1px solid rgba(79,195,247,.35); border-radius: 20px; padding: 24px; display: grid; gap: 6px;
+    }
+    .team-now h3 { margin: 0; font-weight: 700; letter-spacing: .4px; font-size: clamp(24px, 2.2vw, 30px); color: var(--accent); }
+    .team-name { font-size: clamp(40px, 8vw, 86px); font-weight: 900; letter-spacing: .6px; line-height: 1.05; word-break: break-word; }
+    .subtle { color: var(--sub); }
+
+    .timer {
+      display: grid; place-items: center; background: #0c131d; border: 1px solid var(--muted); border-radius: 20px; padding: 24px;
+    }
+    .time {
+      font-variant-numeric: tabular-nums; font-size: clamp(44px, 9vw, 120px); font-weight: 900; letter-spacing: 1px;
+    }
+    .progress {
+      height: 10px; width: 100%; background: #101826; border-radius: 999px; overflow: hidden; border: 1px solid var(--muted); margin-top: 10px;
+    }
+    .bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+
+    .queue {
+      display: grid; gap: 8px; grid-auto-rows: minmax(44px, auto); max-height: 42vh; overflow: auto;
+    }
+    .chip { display: grid; grid-template-columns: 40px 1fr; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--muted); background: #0f1620; }
+    .chip .num { background: #0b1017; border: 1px solid var(--muted); border-radius: 9px; display: grid; place-items: center; font-weight: 700; color: var(--sub); height: 36px; }
+    .chip.active { border-color: var(--accent); background: linear-gradient(180deg, rgba(79,195,247,.14), rgba(79,195,247,.02)); }
+
+    .controls { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+    .controls .btn { font-weight: 700; }
+    .footer { display: flex; align-items: center; justify-content: space-between; color: var(--sub); font-size: 12px; }
+
+    @media (max-width: 900px) {
+      .wrap { grid-template-columns: 1fr; }
+      .board { grid-template-columns: 1fr; }
+      .controls { grid-template-columns: repeat(3, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <aside class="panel settings">
+      <h2>Setup</h2>
+      <label for="names">Teams / Managers <small>(one per line, in draft order)</small></label>
+      <textarea id="names" rows="12" placeholder="Team 1\nTeam 2\nTeam 3\nTeam 4\nTeam 5\nTeam 6\nTeam 7\nTeam 8"></textarea>
+
+      <div class="row">
+        <div>
+          <label for="mins">Minutes per pick</label>
+          <input id="mins" type="number" min="0" value="1" />
+        </div>
+        <div>
+          <label for="secs">Seconds per pick</label>
+          <input id="secs" type="number" min="0" max="59" value="0" />
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:8px">
+        <label style="display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="autoAdvance" /> Auto‑advance at 0
+        </label>
+        <label style="display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="soundToggle" checked /> Beep at 0
+        </label>
+      </div>
+
+      <div class="row" style="margin-top:12px;">
+        <button class="btn primary" id="build">Build Snake Order</button>
+        <button class="btn ghost" id="rand">Randomize Order</button>
+      </div>
+
+      <hr style="border:0; border-top:1px solid var(--muted); margin:14px 0;" />
+      <h2>How to use</h2>
+      <small>
+        Enter team names in order, click <b>Build Snake Order</b>. Then use controls:<br/>
+        <b>Next Pick</b> resets the clock and advances. <b>Undo</b> goes back. <b>Pause/Resume</b> toggles the timer. 
+        Optional: <b>Auto‑advance</b> moves to the next pick automatically at 0.
+        <br/><br/>Keyboard: <b>Space</b> Pause/Resume, <b>N or Enter</b> Next, <b>B or ⌫</b> Undo, <b>R</b> Reset Clock, <b>F</b> Fullscreen.
+      </small>
+    </aside>
+
+    <main class="stage">
+      <div class="stage-inner">
+        <div class="board">
+          <section class="team-now">
+            <h3>On the Clock</h3>
+            <div id="teamName" class="team-name">—</div>
+            <div class="subtle">Next up: <span id="nextName">—</span></div>
+          </section>
+          <section class="timer">
+            <div class="time" id="time">01:00</div>
+            <div class="progress"><div id="bar" class="bar"></div></div>
+          </section>
+        </div>
+
+        <section class="panel">
+          <div class="controls">
+            <button class="btn go" id="next">⏭️ Next Pick</button>
+            <button class="btn" id="pause">⏸️ Pause</button>
+            <button class="btn warn" id="resetClock">⟳ Reset Clock</button>
+            <button class="btn" id="undo">⏮️ Undo</button>
+            <button class="btn" id="fullscreen">⛶ Fullscreen</button>
+            <button class="btn danger" id="resetAll">🗑️ Reset Draft</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Order (Snake)</h2>
+          <div id="queue" class="queue"></div>
+        </section>
+
+        <div class="footer">
+          <div>Snake Draft Countdown • Local use only (no data leaves your browser)</div>
+          <div id="roundInfo"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <audio id="beep" preload="auto">
+    <source src="data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCAAAACAAACcQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" type="audio/mp3">
+  </audio>
+
+  <script>
+    const el = (id) => document.getElementById(id);
+    const namesTA = el('names');
+    const minsIn = el('mins');
+    const secsIn = el('secs');
+    const autoAdvance = el('autoAdvance');
+    const soundToggle = el('soundToggle');
+
+    const buildBtn = el('build');
+    const randBtn = el('rand');
+    const nextBtn = el('next');
+    const pauseBtn = el('pause');
+    const resetClockBtn = el('resetClock');
+    const undoBtn = el('undo');
+    const fsBtn = el('fullscreen');
+    const resetAllBtn = el('resetAll');
+
+    const teamName = el('teamName');
+    const nextName = el('nextName');
+    const timeEl = el('time');
+    const bar = el('bar');
+    const queue = el('queue');
+    const roundInfo = el('roundInfo');
+
+    const beep = el('beep');
+
+    let teams = [];
+    let snake = []; // index order for a two-round snake (e.g., [0..n-1, n-1..0])
+    let pickIndex = 0; // global sequence index across infinite rounds (mod snake.length)
+
+    let durationMs = 60_000; // default 1 min
+    let remainingMs = durationMs;
+    let running = false;
+    let lastTick = 0;
+    let rafId = null;
+
+    function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
+
+    function parseNames() {
+      return namesTA.value
+        .split(/\n/)
+        .map(s => s.trim())
+        .filter(Boolean);
+    }
+
+    function shuffle(arr) {
+      const a = arr.slice();
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    function buildSnakeOrder(list) {
+      const n = list.length;
+      if (n === 0) return [];
+      const forward = Array.from({length: n}, (_, i) => i);
+      const backward = Array.from({length: n}, (_, i) => n - 1 - i);
+      return forward.concat(backward);
+    }
+
+    function msFmt(ms){
+      ms = Math.max(0, ms);
+      const s = Math.floor(ms / 1000);
+      const m = Math.floor(s / 60);
+      const ss = String(s % 60).padStart(2, '0');
+      return `${m}:${ss}`;
+    }
+
+    function updateTimerUI(){
+      timeEl.textContent = msFmt(remainingMs);
+      const pct = clamp(1 - remainingMs / durationMs, 0, 1);
+      bar.style.width = (pct * 100).toFixed(2) + '%';
+      if (remainingMs <= 10_000) {
+        bar.style.background = `linear-gradient(90deg, var(--warn), var(--danger))`;
+      } else {
+        bar.style.background = `linear-gradient(90deg, var(--accent), var(--accent-2))`;
+      }
+    }
+
+    function tick(ts){
+      if (!running) return;
+      if (!lastTick) lastTick = ts;
+      const dt = ts - lastTick;
+      lastTick = ts;
+      remainingMs -= dt;
+      if (remainingMs <= 0){
+        remainingMs = 0;
+        running = false;
+        updateTimerUI();
+        if (soundToggle.checked) { try { beep.currentTime = 0; beep.play(); } catch(e){} }
+        if (autoAdvance.checked) {
+          // auto-advance after a short breath
+          setTimeout(() => nextPick(true), 500);
+        }
+        return;
+      }
+      updateTimerUI();
+      rafId = requestAnimationFrame(tick);
+    }
+
+    function startClock(){
+      if (remainingMs <= 0) remainingMs = durationMs;
+      if (!running){
+        running = true;
+        lastTick = 0;
+        rafId = requestAnimationFrame(tick);
+        pauseBtn.textContent = '⏸️ Pause';
+      }
+    }
+
+    function pauseClock(){
+      running = false;
+      if (rafId) cancelAnimationFrame(rafId);
+      pauseBtn.textContent = '▶️ Resume';
+    }
+
+    function togglePause(){
+      running ? pauseClock() : startClock();
+    }
+
+    function resetClock(){
+      remainingMs = durationMs;
+      updateTimerUI();
+    }
+
+    function setDurationFromInputs(){
+      const m = parseInt(minsIn.value || '0', 10);
+      const s = parseInt(secsIn.value || '0', 10);
+      const secs = clamp(m,0,600)*60 + clamp(s,0,59);
+      durationMs = Math.max(1000, secs * 1000);
+      if (!running) { remainingMs = durationMs; updateTimerUI(); }
+    }
+
+    function renderQueue(){
+      queue.innerHTML = '';
+      if (!teams.length || !snake.length) return;
+      // Render two cycles worth so you can see ahead
+      const lookahead = snake.concat(snake).slice(pickIndex % snake.length, (pickIndex % snake.length) + Math.min(2*snake.length, 36));
+      lookahead.forEach((idx, i) => {
+        const div = document.createElement('div');
+        div.className = 'chip' + (i===0 ? ' active' : '');
+        const num = document.createElement('div');
+        num.className = 'num';
+        num.textContent = i === 0 ? '▶' : (i+1);
+        const name = document.createElement('div');
+        name.textContent = teams[idx];
+        div.appendChild(num); div.appendChild(name);
+        queue.appendChild(div);
+      });
+      const round = Math.floor(pickIndex / teams.length) + 1; // rough indicator
+      roundInfo.textContent = `Approx. Round ${round}`;
+    }
+
+    function updateWho(){
+      if (!teams.length || !snake.length) {
+        teamName.textContent = '—';
+        nextName.textContent = '—';
+        return;
+      }
+      const curIdx = snake[pickIndex % snake.length];
+      const nxtIdx = snake[(pickIndex + 1) % snake.length];
+      teamName.textContent = teams[curIdx];
+      nextName.textContent = teams[nxtIdx];
+      renderQueue();
+    }
+
+    function nextPick(auto=false){
+      pickIndex++;
+      updateWho();
+      resetClock();
+      if (!auto) startClock();
+    }
+
+    function undoPick(){
+      if (pickIndex > 0) { pickIndex--; updateWho(); }
+      resetClock();
+    }
+
+    function resetAll(){
+      pauseClock();
+      pickIndex = 0; remainingMs = durationMs; updateWho(); updateTimerUI(); renderQueue();
+    }
+
+    function build(){
+      teams = parseNames();
+      if (!teams.length) {
+        alert('Please enter at least one team name.');
+        return;
+      }
+      snake = buildSnakeOrder(teams);
+      setDurationFromInputs();
+      pickIndex = 0; remainingMs = durationMs; updateWho(); updateTimerUI(); renderQueue();
+      startClock();
+    }
+
+    // Event wiring
+    buildBtn.addEventListener('click', build);
+    randBtn.addEventListener('click', () => {
+      const list = parseNames();
+      if (!list.length) return;
+      namesTA.value = shuffle(list).join('\n');
+    });
+
+    nextBtn.addEventListener('click', () => nextPick(false));
+    pauseBtn.addEventListener('click', togglePause);
+    resetClockBtn.addEventListener('click', resetClock);
+    undoBtn.addEventListener('click', undoPick);
+    fsBtn.addEventListener('click', () => {
+      const root = document.documentElement;
+      if (!document.fullscreenElement) root.requestFullscreen?.(); else document.exitFullscreen?.();
+    });
+    resetAllBtn.addEventListener('click', resetAll);
+
+    minsIn.addEventListener('change', setDurationFromInputs);
+    secsIn.addEventListener('change', setDurationFromInputs);
+
+    // Keyboard shortcuts
+    window.addEventListener('keydown', (e) => {
+      if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+      if (e.code === 'Space') { e.preventDefault(); togglePause(); }
+      if (e.code === 'Enter' || e.key.toLowerCase() === 'n') { e.preventDefault(); nextPick(false); }
+      if (e.key.toLowerCase() === 'b' || e.code === 'Backspace') { e.preventDefault(); undoPick(); }
+      if (e.key.toLowerCase() === 'r') { e.preventDefault(); resetClock(); }
+      if (e.key.toLowerCase() === 'f') { e.preventDefault(); fsBtn.click(); }
+    });
+
+    // Demo defaults
+    namesTA.value = [
+      'Team 1','Team 2','Team 3','Team 4','Team 5','Team 6','Team 7','Team 8'
+    ].join('\n');
+    updateTimerUI();
+  </script>
+</body>
+</html>
